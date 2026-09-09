@@ -100,6 +100,7 @@
   } from '$lib/data/store';
   import BookCompletionConfetti from '$lib/components/book-reader/book-completion-confetti/book-completion-confetti.svelte';
   import BookReaderHeader from '$lib/components/book-reader/book-reader-header.svelte';
+  import BookReaderTtsBar from '$lib/components/book-reader/book-reader-tts/book-reader-tts-bar.svelte';
   import {
     readerImageGalleryPictures$,
     toggleImageGalleryPictureSpoiler$,
@@ -1144,6 +1145,14 @@
     ttsController?.toggle();
   }
 
+  function stopTts() {
+    autoScroller?.off();
+    ttsController?.stop({ keepPosition: true });
+  }
+
+  $: showTtsBar = $isMobile$ && ttsSpeaking;
+  $: ttsBarOffset = showTtsBar ? 'calc(3.5rem + env(safe-area-inset-bottom, 0px))' : '0px';
+
   function restartTts() {
     const handled = ttsController?.stopOrRestart() ?? false;
 
@@ -1731,6 +1740,17 @@
   </div>
 {/if}
 
+{#if showTtsBar}
+  <BookReaderTtsBar
+    paused={ttsPaused}
+    bind:rate={$ttsRate$}
+    on:playPause={toggleTts}
+    on:stop={stopTts}
+    on:skipBack={() => ttsController?.skip(-1)}
+    on:skipForward={() => ttsController?.skip(1)}
+  />
+{/if}
+
 {#if $bookData$ && $rawBookData$}
   {#if $statisticsEnabled$}
     <BookReadingTracker
@@ -1892,7 +1912,8 @@
   id="ttu-page-footer"
   tabindex="0"
   role="button"
-  class="writing-horizontal-tb fixed bottom-0 left-0 z-10 flex h-8 w-full items-center justify-between text-xs leading-none"
+  class="writing-horizontal-tb fixed left-0 z-10 flex h-8 w-full items-center justify-between text-xs leading-none"
+  style:bottom={ttsBarOffset}
   style:color={$themeOption$?.tooltipTextFontColor}
   on:click={() => (showFooter = !showFooter)}
   on:keyup={dummyFn}
@@ -1947,11 +1968,12 @@
       tabindex="0"
       role="button"
       title="Click to copy Progress"
-      class="writing-horizontal-tb fixed bottom-2 right-2 z-10 text-xs leading-none select-none whitespace-pre"
+      class="writing-horizontal-tb fixed right-2 z-10 text-xs leading-none select-none whitespace-pre"
       class:invisible={!$showCharacterCounter$ &&
         !$showPercentage$ &&
         !$showFooterChapterCharacterCounter$ &&
         !$showFooterChapterPercentage$}
+      style:bottom={showTtsBar ? 'calc(3.5rem + env(safe-area-inset-bottom, 0px) + 0.5rem)' : '0.5rem'}
       style:color={$themeOption$?.tooltipTextFontColor}
       on:click|stopPropagation={({ target }) => {
         if (!$showCharacterCounter$ && !$showPercentage$) {
