@@ -30,6 +30,9 @@
   on:click|stopPropagation
 >
   <div class="flex h-14 items-center justify-center gap-1 px-3">
+    <div class="ml-1 flex h-12 items-center">
+      <TtsRateSelect compact bind:rate />
+    </div>
     <button
       type="button"
       title="Previous paragraph"
@@ -48,22 +51,19 @@
     </button>
     <button
       type="button"
-      title="Stop text to speech"
-      class="flex h-12 w-12 items-center justify-center text-xl opacity-80 hover:opacity-100"
-      on:click={() => dispatch('stop')}
-    >
-      <Fa icon={faStop} />
-    </button>
-    <button
-      type="button"
       title="Next paragraph"
       class="flex h-12 w-12 items-center justify-center text-xl opacity-80 hover:opacity-100"
       on:click={() => dispatch('skipForward')}
     >
       <Fa icon={faForward} />
     </button>
-    <div class="ml-1 flex h-12 items-center">
-      <TtsRateSelect compact bind:rate />
-    </div>
+    <button
+      type="button"
+      title="Stop text to speech"
+      class="flex h-12 w-12 items-center justify-center text-xl opacity-80 hover:opacity-100"
+      on:click={() => dispatch('stop')}
+    >
+      <Fa icon={faStop} />
+    </button>
   </div>
 </div>
