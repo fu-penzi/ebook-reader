@@ -29,38 +29,41 @@
   on:pointerdown|stopPropagation
   on:click|stopPropagation
 >
-  <div class="flex h-14 items-center justify-center gap-1 px-3">
-    <div class="ml-1 flex h-12 items-center">
+  <div class="flex h-14 px-3 items-center justify-between gap-1">
+    <div class="ml-1 flex w-16 h-12 items-center">
       <TtsRateSelect compact bind:rate />
     </div>
-    <button
-      type="button"
-      title="Previous paragraph"
-      class="flex h-12 w-12 items-center justify-center text-xl opacity-80 hover:opacity-100"
-      on:click={() => dispatch('skipBack')}
-    >
-      <Fa icon={faBackward} />
-    </button>
-    <button
-      type="button"
-      title={paused ? 'Play text to speech' : 'Pause text to speech'}
-      class="flex h-12 w-12 items-center justify-center text-2xl opacity-90 hover:opacity-100"
-      on:click={() => dispatch('playPause')}
-    >
-      <Fa icon={paused ? faPlay : faPause} />
-    </button>
-    <button
-      type="button"
-      title="Next paragraph"
-      class="flex h-12 w-12 items-center justify-center text-xl opacity-80 hover:opacity-100"
-      on:click={() => dispatch('skipForward')}
-    >
-      <Fa icon={faForward} />
-    </button>
+    <div class="flex items-center justify-center gap-1">
+      <button
+        type="button"
+        title="Previous paragraph"
+        class="flex h-12 w-12 items-center justify-center text-xl opacity-80 hover:opacity-100"
+        on:click={() => dispatch('skipBack')}
+      >
+        <Fa icon={faBackward} />
+      </button>
+      <button
+        type="button"
+        title={paused ? 'Play text to speech' : 'Pause text to speech'}
+        class="flex h-12 w-24 items-center justify-center text-3xl opacity-90 hover:opacity-100"
+        on:click={() => dispatch('playPause')}
+      >
+        <Fa icon={paused ? faPlay : faPause} />
+      </button>
+      <button
+        type="button"
+        title="Next paragraph"
+        class="flex h-12 w-12 items-center justify-center text-xl opacity-80 hover:opacity-100"
+        on:click={() => dispatch('skipForward')}
+      >
+        <Fa icon={faForward} />
+      </button>
+    </div>
+
     <button
       type="button"
       title="Stop text to speech"
-      class="flex h-12 w-12 items-center justify-center text-xl opacity-80 hover:opacity-100"
+      class="flex h-12 w-16 items-center justify-center text-xl opacity-80 hover:opacity-100"
       on:click={() => dispatch('stop')}
     >
       <Fa icon={faStop} />
