@@ -1149,7 +1149,7 @@
     ttsController?.stop({ keepPosition: true });
   }
 
-  $: showTtsBar = $isMobile$ && ttsSpeaking;
+  $: showTtsBar = ttsSpeaking;
   $: ttsBarOffset = showTtsBar ? 'calc(3.5rem + env(safe-area-inset-bottom, 0px))' : '0px';
 
   function restartTts() {
