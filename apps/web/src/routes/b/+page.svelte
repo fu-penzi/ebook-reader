@@ -1666,7 +1666,6 @@
       {ttsSupported}
       {ttsSpeaking}
       {ttsPaused}
-      bind:ttsRate={$ttsRate$}
       bind:isBookmarkScreen
       on:tocClick={() => {
         pauseTracker();
