@@ -36,10 +36,11 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
+        working-directory: apps/web
         env:
           VITE_PAGE_PATH: /${{ github.event.repository.name }}
           VITE_BASE_PATH: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
-        run: pnpm --dir apps/web svelte-kit sync && pnpm --dir apps/web build
+        run: pnpm svelte-kit sync && pnpm build
 
       - name: Add .nojekyll
         run: touch apps/web/build/.nojekyll
