@@ -487,7 +487,6 @@
       } else if (currentSelected) {
         lastSelectedRange = window.getSelection()?.getRangeAt(0);
         lastSelectedRangeWasEmpty = false;
-        ttsController?.seekToSelection();
       } else {
         lastSelectedRangeWasEmpty = true;
       }

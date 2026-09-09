@@ -15,6 +15,10 @@ export const TTS_HIGHLIGHT_NAME = 'ttu-tts';
 const BLOCK_SELECTOR = 'p, h1, h2, h3, h4, h5, h6, li, blockquote, td, th, pre, dt, dd';
 const MAX_UTTERANCE_CHARS = 180;
 const PAGE_FLIP_ATTEMPTS = 40;
+const TAP_MOVE_PX = 10;
+const TAP_MAX_MS = 500;
+const TAP_IGNORE_SELECTOR =
+  'button, a, input, select, textarea, label, [role="button"], [role="toolbar"], [role="option"], [role="listbox"], #ttu-page-footer';
 
 interface MappedText {
   text: string;
@@ -406,6 +410,10 @@ export class TextToSpeechController {
 
   private mediaBound = false;
 
+  private tapPointer:
+    | { id: number; x: number; y: number; startedAt: number; moved: boolean }
+    | undefined;
+
   constructor() {
     if (isSpeechSynthesisSupported()) {
       window.speechSynthesis.getVoices();
@@ -413,6 +421,10 @@ export class TextToSpeechController {
 
     this.bindMediaSession();
     window.addEventListener('keydown', this.onHardwareMediaKey, true);
+    window.addEventListener('pointerdown', this.onPointerDown, { passive: true });
+    window.addEventListener('pointermove', this.onPointerMove, { passive: true });
+    window.addEventListener('pointerup', this.onPointerUp, { passive: true });
+    window.addEventListener('pointercancel', this.onPointerCancel, { passive: true });
   }
 
   setStateChangeListener(listener: (() => void) | undefined) {
@@ -564,7 +576,26 @@ export class TextToSpeechController {
     }
 
     this.blocks = getSpeakableElements(this.contentEl);
-    const selected = this.readSelectionPosition();
+    return this.applySeek(this.readSelectionPosition());
+  }
+
+  seekToPoint(clientX: number, clientY: number) {
+    if (!isSpeechSynthesisSupported() || (!this.speaking && !this.paused)) {
+      return false;
+    }
+
+    this.resolveContentEl();
+    if (!this.contentEl) {
+      return false;
+    }
+
+    this.blocks = getSpeakableElements(this.contentEl);
+    return this.applySeek(this.readPointPosition(clientX, clientY));
+  }
+
+  private applySeek(
+    selected: { index: number; element: HTMLElement; offset: number } | undefined
+  ) {
     if (!selected) {
       return false;
     }
@@ -637,6 +668,10 @@ export class TextToSpeechController {
     this.stop();
     this.unbindMediaSession();
     window.removeEventListener('keydown', this.onHardwareMediaKey, true);
+    window.removeEventListener('pointerdown', this.onPointerDown);
+    window.removeEventListener('pointermove', this.onPointerMove);
+    window.removeEventListener('pointerup', this.onPointerUp);
+    window.removeEventListener('pointercancel', this.onPointerCancel);
   }
 
   skip(offset: number) {
@@ -684,7 +719,24 @@ export class TextToSpeechController {
       return undefined;
     }
 
-    const start = this.resolveTextPoint(range.startContainer, range.startOffset);
+    return this.positionFromCaret(range.startContainer, range.startOffset);
+  }
+
+  private readPointPosition(clientX: number, clientY: number) {
+    if (!this.blocks.length) {
+      return undefined;
+    }
+
+    const caret = caretFromPoint(clientX, clientY);
+    if (!caret) {
+      return undefined;
+    }
+
+    return this.positionFromCaret(caret.node, caret.offset);
+  }
+
+  private positionFromCaret(node: Node, offset: number) {
+    const start = this.resolveTextPoint(node, offset);
     if (!start) {
       return undefined;
     }
@@ -709,6 +761,11 @@ export class TextToSpeechController {
   }
 
   private resolveTextPoint(node: Node, offset: number) {
+    const fromRt = textPointFromRuby(node);
+    if (fromRt) {
+      return fromRt;
+    }
+
     if (node.nodeType === Node.TEXT_NODE) {
       return { node: node as Text, offset };
     }
@@ -1126,6 +1183,77 @@ export class TextToSpeechController {
     }
   };
 
+  private onPointerDown = (event: PointerEvent) => {
+    if (!this.speaking || event.button > 0 || this.isIgnoredTapTarget(event.target)) {
+      this.tapPointer = undefined;
+      return;
+    }
+
+    this.tapPointer = {
+      id: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      startedAt: event.timeStamp,
+      moved: false
+    };
+  };
+
+  private onPointerMove = (event: PointerEvent) => {
+    if (!this.tapPointer || event.pointerId !== this.tapPointer.id || this.tapPointer.moved) {
+      return;
+    }
+
+    const deltaX = event.clientX - this.tapPointer.x;
+    const deltaY = event.clientY - this.tapPointer.y;
+
+    if (deltaX * deltaX + deltaY * deltaY >= TAP_MOVE_PX * TAP_MOVE_PX) {
+      this.tapPointer.moved = true;
+    }
+  };
+
+  private onPointerUp = (event: PointerEvent) => {
+    const tap = this.tapPointer;
+    this.tapPointer = undefined;
+
+    if (!tap || event.pointerId !== tap.id) {
+      return;
+    }
+
+    const deltaX = event.clientX - tap.x;
+    const deltaY = event.clientY - tap.y;
+    const moved =
+      tap.moved || deltaX * deltaX + deltaY * deltaY >= TAP_MOVE_PX * TAP_MOVE_PX;
+
+    if (
+      moved ||
+      event.timeStamp - tap.startedAt > TAP_MAX_MS ||
+      this.isIgnoredTapTarget(event.target)
+    ) {
+      return;
+    }
+
+    this.seekToPoint(event.clientX, event.clientY);
+  };
+
+  private onPointerCancel = (event: PointerEvent) => {
+    if (this.tapPointer?.id === event.pointerId) {
+      this.tapPointer = undefined;
+    }
+  };
+
+  private isIgnoredTapTarget(target: EventTarget | null) {
+    if (!(target instanceof Element)) {
+      return true;
+    }
+
+    if (target.closest(TAP_IGNORE_SELECTOR)) {
+      return true;
+    }
+
+    this.resolveContentEl();
+    return !this.contentEl || !this.contentEl.contains(target);
+  }
+
   private bindMediaSession() {
     if (this.mediaBound || !hasMediaSession()) {
       return;
@@ -1211,6 +1339,57 @@ function mediaArtwork(): MediaImage[] {
   }
 
   return [{ src: href, sizes: '152x152', type: 'image/png' }];
+}
+
+function caretFromPoint(clientX: number, clientY: number) {
+  const doc = document as Document & {
+    caretRangeFromPoint?: (x: number, y: number) => Range | null;
+    caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+  };
+
+  if (typeof doc.caretRangeFromPoint === 'function') {
+    const range = doc.caretRangeFromPoint(clientX, clientY);
+    if (!range) {
+      return undefined;
+    }
+
+    return { node: range.startContainer, offset: range.startOffset };
+  }
+
+  if (typeof doc.caretPositionFromPoint === 'function') {
+    const position = doc.caretPositionFromPoint(clientX, clientY);
+    if (!position) {
+      return undefined;
+    }
+
+    return { node: position.offsetNode, offset: position.offset };
+  }
+
+  return undefined;
+}
+
+function textPointFromRuby(node: Node) {
+  const element = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
+  if (!element?.closest('rt')) {
+    return undefined;
+  }
+
+  const ruby = element.closest('ruby');
+  if (!ruby) {
+    return undefined;
+  }
+
+  const walker = document.createTreeWalker(ruby, NodeFilter.SHOW_TEXT, {
+    acceptNode: (candidate) =>
+      candidate.parentElement?.closest('rt') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
+  });
+  const text = walker.nextNode() as Text | null;
+
+  if (!text) {
+    return undefined;
+  }
+
+  return { node: text, offset: 0 };
 }
 
 function getMappedText(element: HTMLElement): MappedText {
