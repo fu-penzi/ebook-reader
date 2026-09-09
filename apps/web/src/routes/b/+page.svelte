@@ -207,6 +207,10 @@
   ttsController?.setStateChangeListener(() => {
     ttsSpeaking = ttsController.speaking;
     ttsPaused = ttsController.paused;
+
+    if (ttsSpeaking && !ttsPaused) {
+      autoScroller?.off();
+    }
   });
   let bookmarkData: Promise<BooksDbBookmarkData | undefined> = Promise.resolve(undefined);
   let customReadingPointTop = -2;
@@ -518,7 +522,8 @@
     voiceURI: $ttsVoiceURI$,
     autoScroll: $ttsAutoScroll$,
     viewMode: $viewMode$,
-    verticalMode: $verticalMode$
+    verticalMode: $verticalMode$,
+    title: $rawBookData$?.title || ''
   });
 
   $: ttsController?.setPageManager(pageManager);
@@ -613,7 +618,7 @@
   /** Experimental Code - May be removed any time without warning */
 
   onDestroy(() => {
-    ttsController?.stop();
+    ttsController?.destroy();
 
     if (browser) {
       document.removeEventListener('ttu-action', handleAction, false);

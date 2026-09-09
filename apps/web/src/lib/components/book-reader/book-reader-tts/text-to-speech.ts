@@ -27,6 +27,7 @@ export interface TextToSpeechOptions {
   autoScroll: boolean;
   viewMode: ViewMode;
   verticalMode: boolean;
+  title: string;
 }
 
 export function isSpeechSynthesisSupported() {
@@ -381,7 +382,8 @@ export class TextToSpeechController {
     voiceURI: '',
     autoScroll: true,
     viewMode: ViewMode.Paginated,
-    verticalMode: true
+    verticalMode: true,
+    title: ''
   };
 
   private blocks: HTMLElement[] = [];
@@ -402,10 +404,16 @@ export class TextToSpeechController {
 
   private overlayEl: HTMLElement | undefined;
 
+  private mediaBound = false;
+
+  private audioContext: AudioContext | undefined;
+
   constructor() {
     if (isSpeechSynthesisSupported()) {
       window.speechSynthesis.getVoices();
     }
+
+    this.bindMediaSession();
   }
 
   setStateChangeListener(listener: (() => void) | undefined) {
@@ -425,6 +433,8 @@ export class TextToSpeechController {
       this.generation += 1;
       this.cancelEngine();
       this.speakCurrent();
+    } else if (options.title !== undefined) {
+      this.syncMediaSession();
     }
   }
 
@@ -622,6 +632,16 @@ export class TextToSpeechController {
     }
     this.cancelEngine();
     this.emitState();
+  }
+
+  destroy() {
+    this.stop();
+    this.unbindMediaSession();
+
+    if (this.audioContext) {
+      void this.audioContext.close();
+      this.audioContext = undefined;
+    }
   }
 
   skip(offset: number) {
@@ -1087,7 +1107,118 @@ export class TextToSpeechController {
   }
 
   private emitState() {
+    this.syncMediaSession();
     this.onStateChange?.();
+  }
+
+  private bindMediaSession() {
+    if (this.mediaBound || !hasMediaSession()) {
+      return;
+    }
+
+    this.mediaBound = true;
+    setMediaHandler('play', () => this.onMediaPlay());
+    setMediaHandler('pause', () => this.onMediaStop());
+    setMediaHandler('stop', () => this.onMediaStop());
+  }
+
+  private unbindMediaSession() {
+    if (!this.mediaBound || !hasMediaSession()) {
+      this.mediaBound = false;
+      return;
+    }
+
+    setMediaHandler('play', null);
+    setMediaHandler('pause', null);
+    setMediaHandler('stop', null);
+    navigator.mediaSession.playbackState = 'none';
+    this.mediaBound = false;
+  }
+
+  private onMediaPlay() {
+    if (this.speaking && !this.paused) {
+      return;
+    }
+
+    if (this.speaking && this.paused) {
+      this.resume();
+      return;
+    }
+
+    this.start({ fromCurrent: true });
+  }
+
+  private onMediaStop() {
+    if (!this.speaking) {
+      return;
+    }
+
+    this.stop({ keepPosition: true });
+  }
+
+  private syncMediaSession() {
+    if (!hasMediaSession()) {
+      return;
+    }
+
+    this.bindMediaSession();
+
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: this.options.title || 'Text to speech',
+        artist: 'ッツ Reader'
+      });
+    } catch {
+      // Some WebViews reject MediaMetadata.
+    }
+
+    if (this.speaking && !this.paused) {
+      navigator.mediaSession.playbackState = 'playing';
+      this.ensureMediaPlayback();
+      return;
+    }
+
+    navigator.mediaSession.playbackState = this.currentElement ? 'paused' : 'none';
+
+    if (this.audioContext) {
+      this.ensureMediaPlayback();
+    }
+  }
+
+  private ensureMediaPlayback() {
+    const AudioCtx =
+      window.AudioContext ||
+      (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+
+    if (!AudioCtx) {
+      return;
+    }
+
+    if (!this.audioContext) {
+      this.audioContext = new AudioCtx();
+      const oscillator = this.audioContext.createOscillator();
+      const gain = this.audioContext.createGain();
+      gain.gain.value = 0.00001;
+      oscillator.connect(gain);
+      gain.connect(this.audioContext.destination);
+      oscillator.start();
+    }
+
+    if (this.audioContext.state === 'suspended') {
+      void this.audioContext.resume();
+    }
+  }
+}
+
+function hasMediaSession() {
+  return typeof navigator !== 'undefined' && 'mediaSession' in navigator;
+}
+
+function setMediaHandler(action: MediaSessionAction, handler: MediaSessionActionHandler | null) {
+  try {
+    navigator.mediaSession.setActionHandler(action, handler);
+  } catch {
+    // Unsupported action on this browser.
   }
 }
 
