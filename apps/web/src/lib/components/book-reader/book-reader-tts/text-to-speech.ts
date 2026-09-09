@@ -406,7 +406,13 @@ export class TextToSpeechController {
 
   private mediaBound = false;
 
-  private audioContext: AudioContext | undefined;
+  private keepAliveAudio: HTMLAudioElement | undefined;
+
+  private keepAliveUrl: string | undefined;
+
+  private mediaGeneration = 0;
+
+  private holdingMedia = false;
 
   constructor() {
     if (isSpeechSynthesisSupported()) {
@@ -549,6 +555,7 @@ export class TextToSpeechController {
     this.speaking = true;
     this.paused = false;
     this.generation += 1;
+    void this.activateMediaPlayback();
     this.emitState();
     this.speakCurrent();
     return true;
@@ -615,6 +622,7 @@ export class TextToSpeechController {
     this.paused = false;
     this.generation += 1;
     this.cancelEngine();
+    void this.activateMediaPlayback();
     this.emitState();
     this.speakCurrent();
   }
@@ -636,12 +644,9 @@ export class TextToSpeechController {
 
   destroy() {
     this.stop();
+    this.holdingMedia = false;
     this.unbindMediaSession();
-
-    if (this.audioContext) {
-      void this.audioContext.close();
-      this.audioContext = undefined;
-    }
+    this.releaseKeepAliveAudio();
   }
 
   skip(offset: number) {
@@ -1131,6 +1136,13 @@ export class TextToSpeechController {
     setMediaHandler('play', null);
     setMediaHandler('pause', null);
     setMediaHandler('stop', null);
+
+    try {
+      navigator.mediaSession.setPositionState();
+    } catch {
+      // Older browsers reject clearing position state.
+    }
+
     navigator.mediaSession.playbackState = 'none';
     this.mediaBound = false;
   }
@@ -1149,11 +1161,9 @@ export class TextToSpeechController {
   }
 
   private onMediaStop() {
-    if (!this.speaking) {
-      return;
+    if (this.speaking && !this.paused) {
+      this.stop({ keepPosition: true });
     }
-
-    this.stop({ keepPosition: true });
   }
 
   private syncMediaSession() {
@@ -1162,50 +1172,116 @@ export class TextToSpeechController {
     }
 
     this.bindMediaSession();
+    this.applyMediaMetadata();
+
+    if (this.speaking && !this.paused) {
+      navigator.mediaSession.playbackState = 'playing';
+      return;
+    }
+
+    this.mediaGeneration += 1;
+    this.holdingMedia = false;
+    this.keepAliveAudio?.pause();
+    navigator.mediaSession.playbackState = this.keepAliveAudio ? 'paused' : 'none';
+  }
+
+  private applyMediaMetadata() {
+    if (!hasMediaSession()) {
+      return;
+    }
 
     try {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: this.options.title || 'Text to speech',
-        artist: 'ッツ Reader'
+        artist: 'ッツ Reader',
+        album: 'Ebook',
+        artwork: mediaArtwork()
       });
     } catch {
       // Some WebViews reject MediaMetadata.
     }
 
-    if (this.speaking && !this.paused) {
-      navigator.mediaSession.playbackState = 'playing';
-      this.ensureMediaPlayback();
-      return;
-    }
-
-    navigator.mediaSession.playbackState = this.currentElement ? 'paused' : 'none';
-
-    if (this.audioContext) {
-      this.ensureMediaPlayback();
+    try {
+      navigator.mediaSession.setPositionState({
+        duration: 8 * 60 * 60,
+        playbackRate: 1,
+        position: 0
+      });
+    } catch {
+      // Duration/position is optional.
     }
   }
 
-  private ensureMediaPlayback() {
-    const AudioCtx =
-      window.AudioContext ||
-      (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  private async activateMediaPlayback() {
+    const token = this.mediaGeneration + 1;
+    this.mediaGeneration = token;
+    this.holdingMedia = true;
+    const audio = this.ensureKeepAliveAudio();
 
-    if (!AudioCtx) {
+    this.bindMediaSession();
+    this.applyMediaMetadata();
+
+    try {
+      audio.muted = false;
+      audio.volume = 1;
+      await audio.play();
+    } catch {
+      // Autoplay can be blocked until the next user gesture.
+    }
+
+    if (token !== this.mediaGeneration) {
+      this.holdingMedia = false;
+      audio.pause();
       return;
     }
 
-    if (!this.audioContext) {
-      this.audioContext = new AudioCtx();
-      const oscillator = this.audioContext.createOscillator();
-      const gain = this.audioContext.createGain();
-      gain.gain.value = 0.00001;
-      oscillator.connect(gain);
-      gain.connect(this.audioContext.destination);
-      oscillator.start();
+    if (hasMediaSession()) {
+      navigator.mediaSession.playbackState =
+        this.speaking && !this.paused ? 'playing' : 'paused';
+    }
+  }
+
+  private ensureKeepAliveAudio() {
+    if (this.keepAliveAudio) {
+      return this.keepAliveAudio;
     }
 
-    if (this.audioContext.state === 'suspended') {
-      void this.audioContext.resume();
+    const audio = document.createElement('audio');
+    audio.dataset.ttuTtsKeepalive = 'true';
+    audio.preload = 'auto';
+    audio.loop = true;
+    audio.autoplay = false;
+    audio.controls = true;
+    audio.playsInline = true;
+    audio.setAttribute('playsinline', 'true');
+    audio.setAttribute('webkit-playsinline', 'true');
+    audio.setAttribute('aria-hidden', 'true');
+    audio.tabIndex = -1;
+    audio.src = this.keepAliveUrl || (this.keepAliveUrl = createKeepAliveAudioUrl());
+    audio.style.cssText =
+      'position:fixed;width:1px;height:1px;left:0;bottom:0;opacity:0.01;pointer-events:none;z-index:-1;';
+    audio.addEventListener('pause', () => {
+      if (this.holdingMedia && this.speaking && !this.paused && this.keepAliveAudio === audio) {
+        void audio.play().catch(() => undefined);
+      }
+    });
+    document.body.appendChild(audio);
+    this.keepAliveAudio = audio;
+    return audio;
+  }
+
+  private releaseKeepAliveAudio() {
+    if (this.keepAliveAudio) {
+      this.keepAliveAudio.pause();
+      this.keepAliveAudio.removeAttribute('src');
+      this.keepAliveAudio.load();
+      this.keepAliveAudio.remove();
+      this.keepAliveAudio = undefined;
+    }
+
+    if (this.keepAliveUrl) {
+      URL.revokeObjectURL(this.keepAliveUrl);
+      this.keepAliveUrl = undefined;
     }
   }
 }
@@ -1220,6 +1296,50 @@ function setMediaHandler(action: MediaSessionAction, handler: MediaSessionAction
   } catch {
     // Unsupported action on this browser.
   }
+}
+
+function mediaArtwork(): MediaImage[] {
+  const href = document.querySelector<HTMLLinkElement>('link[rel="icon"][type="image/png"]')?.href;
+
+  if (!href) {
+    return [];
+  }
+
+  return [{ src: href, sizes: '152x152', type: 'image/png' }];
+}
+
+function createKeepAliveAudioUrl() {
+  const sampleRate = 22050;
+  const durationSeconds = 2;
+  const sampleCount = sampleRate * durationSeconds;
+  const buffer = new ArrayBuffer(44 + sampleCount * 2);
+  const view = new DataView(buffer);
+  const writeString = (offset: number, value: string) => {
+    for (let index = 0; index < value.length; index += 1) {
+      view.setUint8(offset + index, value.charCodeAt(index));
+    }
+  };
+
+  writeString(0, 'RIFF');
+  view.setUint32(4, 36 + sampleCount * 2, true);
+  writeString(8, 'WAVE');
+  writeString(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeString(36, 'data');
+  view.setUint32(40, sampleCount * 2, true);
+
+  for (let index = 0; index < sampleCount; index += 1) {
+    const sample = (Math.random() * 2 - 1) * 0.02;
+    view.setInt16(44 + index * 2, sample * 0x7fff, true);
+  }
+
+  return URL.createObjectURL(new Blob([buffer], { type: 'audio/wav' }));
 }
 
 function getMappedText(element: HTMLElement): MappedText {
