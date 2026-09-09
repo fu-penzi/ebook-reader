@@ -52,6 +52,7 @@
   import { dummyFn } from '$lib/functions/utils';
   import {
     listSpeechVoices,
+    watchSpeechVoices,
     isSpeechSynthesisSupported
   } from '$lib/components/book-reader/book-reader-tts/text-to-speech';
   import {
@@ -233,20 +234,9 @@
       return;
     }
 
-    const loadVoices = () => {
-      ttsVoices = listSpeechVoices();
-    };
-
-    loadVoices();
-    window.speechSynthesis.addEventListener('voiceschanged', loadVoices);
-    const retry = window.setTimeout(loadVoices, 300);
-    const retryLate = window.setTimeout(loadVoices, 1000);
-
-    return () => {
-      window.speechSynthesis.removeEventListener('voiceschanged', loadVoices);
-      window.clearTimeout(retry);
-      window.clearTimeout(retryLate);
-    };
+    return watchSpeechVoices((voices) => {
+      ttsVoices = voices;
+    });
   });
 
   $: if (browser && ttsSupported && activeSettings === 'Reader') {
@@ -584,7 +574,11 @@
           title="Text to Speech Voice"
           tooltip="Voice used by reader Text to Speech. Auto prefers a Japanese voice when available"
         >
-          <SettingsTtsVoice voices={ttsVoices} rate={ttsRate} bind:selectedVoiceURI={ttsVoiceURI} />
+          <SettingsTtsVoice
+            bind:voices={ttsVoices}
+            rate={ttsRate}
+            bind:selectedVoiceURI={ttsVoiceURI}
+          />
         </SettingsItemGroup>
       </div>
       <SettingsItemGroup title="Text to Speech Speed" tooltip="Playback rate used by reader Text to Speech">

@@ -42,7 +42,103 @@ export function getSpeechVoices() {
     return [];
   }
 
-  return window.speechSynthesis.getVoices();
+  try {
+    return window.speechSynthesis.getVoices() || [];
+  } catch {
+    return [];
+  }
+}
+
+export interface SpeechVoiceChoice {
+  id: string;
+  label: string;
+}
+
+// Used when a browser never exposes named voices - speaking still works by language alone
+const FALLBACK_LANGUAGES = [
+  'ja-JP',
+  'en-US',
+  'en-GB',
+  'zh-CN',
+  'zh-TW',
+  'ko-KR',
+  'pl-PL',
+  'de-DE',
+  'fr-FR',
+  'es-ES',
+  'it-IT',
+  'pt-BR'
+];
+
+export function speechVoiceId(voice: SpeechSynthesisVoice) {
+  if (voice.voiceURI) {
+    return voice.voiceURI;
+  }
+
+  if (voice.name) {
+    return `${voice.name}::${voice.lang || ''}`;
+  }
+
+  return voice.lang ? `lang:${voice.lang}` : '';
+}
+
+export function findSpeechVoice(voiceId: string) {
+  const voices = getSpeechVoices();
+
+  if (!voiceId) {
+    return undefined;
+  }
+
+  if (voiceId.startsWith('lang:')) {
+    const language = voiceId.slice(5).toLowerCase();
+    const base = language.split('-')[0];
+
+    return (
+      voices.find((voice) => (voice.lang || '').toLowerCase() === language) ||
+      voices.find((voice) => (voice.lang || '').toLowerCase().startsWith(base))
+    );
+  }
+
+  return (
+    voices.find((voice) => speechVoiceId(voice) === voiceId) ||
+    voices.find((voice) => voice.voiceURI === voiceId) ||
+    voices.find((voice) => voice.name === voiceId)
+  );
+}
+
+export function languageForVoiceId(voiceId: string) {
+  if (voiceId.startsWith('lang:')) {
+    return voiceId.slice(5);
+  }
+
+  return findSpeechVoice(voiceId)?.lang || 'ja-JP';
+}
+
+export function applySpeechVoice(utterance: SpeechSynthesisUtterance, voiceId: string) {
+  const selected = findSpeechVoice(voiceId);
+
+  if (selected) {
+    utterance.voice = selected;
+    utterance.lang = selected.lang || languageForVoiceId(voiceId);
+    return;
+  }
+
+  if (voiceId) {
+    utterance.lang = languageForVoiceId(voiceId);
+    return;
+  }
+
+  const voices = getSpeechVoices();
+  const autoVoice =
+    voices.find((voice) => (voice.lang || '').toLowerCase().startsWith('ja')) ||
+    voices.find((voice) => voice.default) ||
+    voices[0];
+
+  utterance.lang = autoVoice?.lang || 'ja-JP';
+
+  if (autoVoice) {
+    utterance.voice = autoVoice;
+  }
 }
 
 export interface SpeechVoiceCountryGroup {
@@ -117,15 +213,67 @@ export function groupSpeechVoicesByCountry(voices: SpeechSynthesisVoice[]): Spee
 export function listSpeechVoices() {
   const seen = new Set<string>();
   const voices = getSpeechVoices().filter((voice) => {
-    if (!voice.voiceURI || seen.has(voice.voiceURI)) {
+    const id = speechVoiceId(voice);
+
+    if (!id || seen.has(id)) {
       return false;
     }
 
-    seen.add(voice.voiceURI);
+    seen.add(id);
     return true;
   });
 
   return groupSpeechVoicesByCountry(voices).flatMap((group) => group.voices);
+}
+
+export function listSpeechVoiceChoices(voices: SpeechSynthesisVoice[]): SpeechVoiceChoice[] {
+  if (voices.length) {
+    return voices.map((voice) => ({
+      id: speechVoiceId(voice),
+      label: `${voice.name || voice.lang} (${countryLabelForVoice(voice)})`
+    }));
+  }
+
+  const languageNames =
+    typeof Intl !== 'undefined' && 'DisplayNames' in Intl
+      ? new Intl.DisplayNames(['en'], { type: 'language' })
+      : undefined;
+
+  return FALLBACK_LANGUAGES.map((lang) => ({
+    id: `lang:${lang}`,
+    label: `${languageNames?.of(lang) || lang} (${countryLabelForLang(lang)})`
+  }));
+}
+
+/**
+ * Mobile browsers populate getVoices() late, sometimes only after a user gesture.
+ * Returns a cleanup function.
+ */
+export function watchSpeechVoices(onVoices: (voices: SpeechSynthesisVoice[]) => void) {
+  if (!isSpeechSynthesisSupported()) {
+    onVoices([]);
+    return () => undefined;
+  }
+
+  const synthesis = window.speechSynthesis;
+  const emit = () => onVoices(listSpeechVoices());
+
+  emit();
+  synthesis.addEventListener('voiceschanged', emit);
+
+  const timers = [100, 300, 800, 2000, 5000].map((delay) => window.setTimeout(emit, delay));
+
+  const onGesture = () => emit();
+
+  window.addEventListener('pointerdown', onGesture, { passive: true });
+  window.addEventListener('touchstart', onGesture, { passive: true });
+
+  return () => {
+    synthesis.removeEventListener('voiceschanged', emit);
+    timers.forEach((timer) => window.clearTimeout(timer));
+    window.removeEventListener('pointerdown', onGesture);
+    window.removeEventListener('touchstart', onGesture);
+  };
 }
 
 export function previewSpeechVoice(voiceURI: string, rate = 1) {
@@ -135,28 +283,14 @@ export function previewSpeechVoice(voiceURI: string, rate = 1) {
 
   window.speechSynthesis.cancel();
 
-  const voices = getSpeechVoices();
-  const selected = voiceURI ? voices.find((voice) => voice.voiceURI === voiceURI) : undefined;
-  const language = selected?.lang.toLowerCase() || '';
-  const japanese = !selected || language.startsWith('ja') || language.startsWith('jp');
+  const language = (voiceURI ? languageForVoiceId(voiceURI) : 'ja-JP').toLowerCase();
+  const japanese = language.startsWith('ja') || language.startsWith('jp');
   const utterance = new SpeechSynthesisUtterance(
     japanese ? 'これはテキスト読み上げのテストです。' : 'This is a text to speech voice preview.'
   );
 
   utterance.rate = Number.isFinite(rate) ? Math.min(2, Math.max(0.5, rate)) : 1;
-  utterance.lang = selected?.lang || 'ja-JP';
-  if (selected) {
-    utterance.voice = selected;
-  } else {
-    const autoVoice =
-      voices.find((voice) => voice.lang.toLowerCase().startsWith('ja')) ||
-      voices.find((voice) => voice.default) ||
-      voices[0];
-    if (autoVoice) {
-      utterance.voice = autoVoice;
-      utterance.lang = autoVoice.lang || 'ja-JP';
-    }
-  }
+  applySpeechVoice(utterance, voiceURI);
 
   window.speechSynthesis.speak(utterance);
 }
@@ -630,12 +764,7 @@ export class TextToSpeechController {
       const chunk = chunks[chunkIndex];
       const utterance = new SpeechSynthesisUtterance(chunk.text);
       utterance.rate = this.clampRate(this.options.rate);
-      utterance.lang = 'ja-JP';
-      const voice = this.resolveVoice();
-      if (voice) {
-        utterance.voice = voice;
-        utterance.lang = voice.lang || 'ja-JP';
-      }
+      applySpeechVoice(utterance, this.options.voiceURI);
 
       const highlightAt = (charIndex: number) => {
         if (generation !== this.generation || !this.speaking) {
@@ -939,23 +1068,6 @@ export class TextToSpeechController {
     this.contentEl
       ?.querySelectorAll(`.${TTS_HIGHLIGHT_CLASS}`)
       .forEach((node) => node.classList.remove(TTS_HIGHLIGHT_CLASS));
-  }
-
-  private resolveVoice() {
-    const voices = getSpeechVoices();
-    if (!voices.length) {
-      return undefined;
-    }
-
-    if (this.options.voiceURI) {
-      return voices.find((voice) => voice.voiceURI === this.options.voiceURI);
-    }
-
-    return (
-      voices.find((voice) => voice.lang.toLowerCase().startsWith('ja')) ||
-      voices.find((voice) => voice.default) ||
-      voices[0]
-    );
   }
 
   private clampRate(rate: number) {

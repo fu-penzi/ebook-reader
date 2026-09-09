@@ -2,7 +2,8 @@
   import { faVolumeHigh } from '@fortawesome/free-solid-svg-icons';
   import Ripple from '$lib/components/ripple.svelte';
   import {
-    groupSpeechVoicesByCountry,
+    listSpeechVoiceChoices,
+    listSpeechVoices,
     previewSpeechVoice
   } from '$lib/components/book-reader/book-reader-tts/text-to-speech';
   import { inputClasses } from '$lib/css-classes';
@@ -14,7 +15,7 @@
   export let rate = 1;
   export let voices: SpeechSynthesisVoice[] = [];
 
-  $: voicesByCountry = groupSpeechVoicesByCountry(voices);
+  $: choices = listSpeechVoiceChoices(voices);
 
   onDestroy(() => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -22,20 +23,27 @@
     }
   });
 
+  function refreshVoices() {
+    voices = listSpeechVoices();
+  }
+
   function preview() {
+    refreshVoices();
     previewSpeechVoice(selectedVoiceURI, rate);
   }
 </script>
 
 <div class="flex items-end gap-2">
-  <select class="{inputClasses} min-w-0 flex-1 cursor-pointer" bind:value={selectedVoiceURI}>
-    <option value="">Auto (Japanese)</option>
-    {#each voicesByCountry as group (group.country)}
-      <optgroup label={group.country}>
-        {#each group.voices as voice (voice.voiceURI)}
-          <option value={voice.voiceURI}>{voice.name}</option>
-        {/each}
-      </optgroup>
+  <select
+    class="{inputClasses} min-w-0 flex-1 cursor-pointer"
+    bind:value={selectedVoiceURI}
+    on:pointerdown={refreshVoices}
+    on:touchstart={refreshVoices}
+    on:focus={refreshVoices}
+  >
+    <option value="">Auto</option>
+    {#each choices as choice (choice.id)}
+      <option value={choice.id}>{choice.label}</option>
     {/each}
   </select>
   <div
@@ -51,5 +59,8 @@
   </div>
 </div>
 {#if !voices.length}
-  <p class="mt-2 text-sm opacity-70">No system voices loaded yet. Open this page again if the list stays empty.</p>
+  <p class="mt-2 text-sm opacity-70">
+    This browser does not expose named voices. The listed languages still select the system voice
+    used for speech.
+  </p>
 {/if}
