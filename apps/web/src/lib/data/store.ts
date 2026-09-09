@@ -122,6 +122,9 @@ export const enableReaderWakeLock$ = writableBooleanLocalStorageSubject()(
   'enableReaderWakeLock',
   false
 );
+export const ttsRate$ = writableNumberLocalStorageSubject()('ttsRate', 1);
+export const ttsVoiceURI$ = writableStringLocalStorageSubject()('ttsVoiceURI', '');
+export const ttsAutoScroll$ = writableBooleanLocalStorageSubject()('ttsAutoScroll', true);
 export const verticalMode$ = writingMode$.pipe(map((writingMode) => writingMode === 'vertical-rl'));
 export const showCharacterCounter$ = writableBooleanLocalStorageSubject()(
   'showCharacterCounter',
@@ -445,8 +448,8 @@ export const bookReaderKeybindMap$ = writableSubject<BookReaderKeybindMap>({
   pagedown: BookReaderAvailableKeybind.NEXT_PAGE,
   PageUp: BookReaderAvailableKeybind.PREV_PAGE,
   pageup: BookReaderAvailableKeybind.PREV_PAGE,
-  Space: BookReaderAvailableKeybind.AUTO_SCROLL_TOGGLE,
-  ' ': BookReaderAvailableKeybind.AUTO_SCROLL_TOGGLE,
+  Space: BookReaderAvailableKeybind.TTS_RESTART,
+  ' ': BookReaderAvailableKeybind.TTS_RESTART,
   KeyA: BookReaderAvailableKeybind.AUTO_SCROLL_INCREASE,
   a: BookReaderAvailableKeybind.AUTO_SCROLL_INCREASE,
   KeyD: BookReaderAvailableKeybind.AUTO_SCROLL_DECREASE,
@@ -460,7 +463,13 @@ export const bookReaderKeybindMap$ = writableSubject<BookReaderKeybindMap>({
   KeyP: BookReaderAvailableKeybind.TOGGLE_TRACKING,
   p: BookReaderAvailableKeybind.TOGGLE_TRACKING,
   KeyF: BookReaderAvailableKeybind.TOGGLE_TRACKING_FREEZE,
-  f: BookReaderAvailableKeybind.TOGGLE_TRACKING_FREEZE
+  f: BookReaderAvailableKeybind.TOGGLE_TRACKING_FREEZE,
+  KeyS: BookReaderAvailableKeybind.TTS_TOGGLE,
+  s: BookReaderAvailableKeybind.TTS_TOGGLE,
+  KeyE: BookReaderAvailableKeybind.TTS_NEXT,
+  e: BookReaderAvailableKeybind.TTS_NEXT,
+  KeyQ: BookReaderAvailableKeybind.TTS_PREV,
+  q: BookReaderAvailableKeybind.TTS_PREV
 });
 
 export const statisticsTabKeybindMap$ = writableSubject<StatisticsTabKeybindMap>({

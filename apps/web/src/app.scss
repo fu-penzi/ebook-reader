@@ -10,6 +10,24 @@
   scrollbar-color: #c1c1c1 #c1c1c100;
 }
 
+::highlight(ttu-tts) {
+  background-color: rgba(255, 213, 79, 0.55);
+}
+
+.ttu-tts-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.ttu-tts-overlay .ttu-tts-active {
+  position: fixed;
+  pointer-events: none;
+  background-color: rgba(255, 213, 79, 0.55);
+  border-radius: 0.1em;
+}
+
 .book-cover {
   overflow-clip-margin: unset;
 }

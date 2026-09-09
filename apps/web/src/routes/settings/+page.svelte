@@ -69,6 +69,9 @@
     viewMode$,
     writingMode$,
     readingGoalsMergeMode$,
+    ttsRate$,
+    ttsVoiceURI$,
+    ttsAutoScroll$,
     hideSpoilerImageMode$
   } from '$lib/data/store';
   import { mergeEntries } from '$lib/components/merged-header-icon/merged-entries';
@@ -170,6 +173,9 @@
       bind:enableTextWrapPretty={$enableTextWrapPretty$}
       bind:textMarginMode={$textMarginMode$}
       bind:enableReaderWakeLock={$enableReaderWakeLock$}
+      bind:ttsRate={$ttsRate$}
+      bind:ttsVoiceURI={$ttsVoiceURI$}
+      bind:ttsAutoScroll={$ttsAutoScroll$}
       bind:showCharacterCounter={$showCharacterCounter$}
       bind:showPercentage={$showPercentage$}
       bind:showFooterChapterCharacterCounter={$showFooterChapterCharacterCounter$}

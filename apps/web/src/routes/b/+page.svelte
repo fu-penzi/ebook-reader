@@ -93,7 +93,10 @@
     showPercentage$,
     enableVerticalFontKerning$,
     enableFontVPAL$,
-    verticalTextOrientation$
+    verticalTextOrientation$,
+    ttsRate$,
+    ttsVoiceURI$,
+    ttsAutoScroll$
   } from '$lib/data/store';
   import BookCompletionConfetti from '$lib/components/book-reader/book-completion-confetti/book-completion-confetti.svelte';
   import BookReaderHeader from '$lib/components/book-reader/book-reader-header.svelte';
@@ -172,6 +175,10 @@
     getWeightedAverage
   } from '$lib/functions/utils';
   import { onKeydownReader } from './on-keydown-reader';
+  import {
+    TextToSpeechController,
+    isSpeechSynthesisSupported
+  } from '$lib/components/book-reader/book-reader-tts/text-to-speech';
   import { onDestroy, onMount, tick } from 'svelte';
   import Fa from 'svelte-fa';
   import {
@@ -191,6 +198,16 @@
   let autoScroller: AutoScroller | undefined;
   let bookmarkManager: BookmarkManager | undefined;
   let pageManager: PageManager | undefined;
+  let readerContentEl: HTMLElement | undefined;
+  let ttsSpeaking = false;
+  let ttsPaused = false;
+  const ttsSupported = browser && isSpeechSynthesisSupported();
+  const ttsController = ttsSupported ? new TextToSpeechController() : undefined;
+
+  ttsController?.setStateChangeListener(() => {
+    ttsSpeaking = ttsController.speaking;
+    ttsPaused = ttsController.paused;
+  });
   let bookmarkData: Promise<BooksDbBookmarkData | undefined> = Promise.resolve(undefined);
   let customReadingPointTop = -2;
   let customReadingPointLeft = -2;
@@ -465,6 +482,7 @@
       } else if (currentSelected) {
         lastSelectedRange = window.getSelection()?.getRangeAt(0);
         lastSelectedRangeWasEmpty = false;
+        ttsController?.seekToSelection();
       } else {
         lastSelectedRangeWasEmpty = true;
       }
@@ -492,6 +510,25 @@
 
   $: if ($tocIsOpen$) {
     autoScroller?.off();
+    ttsController?.pause();
+  }
+
+  $: ttsController?.configure({
+    rate: $ttsRate$,
+    voiceURI: $ttsVoiceURI$,
+    autoScroll: $ttsAutoScroll$,
+    viewMode: $viewMode$,
+    verticalMode: $verticalMode$
+  });
+
+  $: ttsController?.setPageManager(pageManager);
+
+  $: ttsController?.setContent(readerContentEl);
+
+  let lastTtsViewMode = $viewMode$;
+  $: if (lastTtsViewMode !== $viewMode$) {
+    lastTtsViewMode = $viewMode$;
+    ttsController?.stop();
   }
 
   $: if (browser && bookCharCount) {
@@ -576,6 +613,8 @@
   /** Experimental Code - May be removed any time without warning */
 
   onDestroy(() => {
+    ttsController?.stop();
+
     if (browser) {
       document.removeEventListener('ttu-action', handleAction, false);
       document.documentElement.lang = 'ja';
@@ -1094,14 +1133,35 @@
     }
   }
 
+  function toggleTts() {
+    autoScroller?.off();
+    showHeader = false;
+    ttsController?.toggle();
+  }
+
+  function restartTts() {
+    const handled = ttsController?.stopOrRestart() ?? false;
+
+    if (handled) {
+      autoScroller?.off();
+      showHeader = false;
+    }
+
+    return handled;
+  }
+
   function onKeydown(ev: KeyboardEvent) {
+    const activeTag = document.activeElement?.tagName;
     if (
       $skipKeyDownListener$ ||
       ev.altKey ||
       ev.ctrlKey ||
       ev.shiftKey ||
       ev.metaKey ||
-      ev.repeat
+      ev.repeat ||
+      activeTag === 'INPUT' ||
+      activeTag === 'SELECT' ||
+      activeTag === 'TEXTAREA'
     ) {
       return;
     }
@@ -1118,7 +1178,11 @@
       changeChapter,
       handleSetCustomReadingPoint,
       trackerDblClickHandler,
-      freezeTrackerPosition
+      freezeTrackerPosition,
+      toggleTts,
+      restartTts,
+      () => ttsController?.skip(1),
+      () => ttsController?.skip(-1)
     );
 
     if (!result) return;
@@ -1350,6 +1414,7 @@
       await tick();
 
       autoScroller?.off();
+      ttsController?.stop();
       wasTrackerPaused = true;
       isTrackerPaused$.next(true);
 
@@ -1598,6 +1663,10 @@
       showFullscreenButton={fullscreenManager.fullscreenEnabled}
       autoScrollMultiplier={$multiplier$}
       {hasBookmarkData}
+      {ttsSupported}
+      {ttsSpeaking}
+      {ttsPaused}
+      bind:ttsRate={$ttsRate$}
       bind:isBookmarkScreen
       on:tocClick={() => {
         pauseTracker();
@@ -1653,6 +1722,7 @@
       on:settingsClick={() => leaveReader(mergeEntries.SETTINGS.routeId, false)}
       on:domainHintClick={onDomainHintClick}
       on:bookManagerClick={() => leaveReader(mergeEntries.MANAGE.routeId)}
+      on:ttsClick={toggleTts}
     />
   </div>
 {/if}
@@ -1737,6 +1807,8 @@
     bind:customReadingPointScrollOffset
     bind:customReadingPointRange
     bind:showCustomReadingPoint
+    bind:readerContentEl
+    on:contentChange={({ detail }) => ttsController?.setContent(detail)}
     on:bookmark={bookmarkPage}
     on:trackerPause={() => pauseTracker(true)}
   />

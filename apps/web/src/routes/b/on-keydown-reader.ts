@@ -30,7 +30,11 @@ export function onKeydownReader(
   changeChapter: (offset: number) => void,
   handleSetCustomReadingPoint: () => void,
   toggleTracker: () => void,
-  freezeTrackerPosition: () => void
+  freezeTrackerPosition: () => void,
+  toggleTts: () => void,
+  ttsRestart: () => boolean,
+  ttsNext: () => void,
+  ttsPrev: () => void
 ) {
   const action = bookReaderKeybindMap[ev.code || ev.key?.toLowerCase()];
 
@@ -71,6 +75,20 @@ export function onKeydownReader(
       return true;
     case BookReaderAvailableKeybind.TOGGLE_TRACKING_FREEZE:
       freezeTrackerPosition();
+      return true;
+    case BookReaderAvailableKeybind.TTS_TOGGLE:
+      toggleTts();
+      return true;
+    case BookReaderAvailableKeybind.TTS_RESTART:
+      if (!ttsRestart()) {
+        autoScroller?.toggle();
+      }
+      return true;
+    case BookReaderAvailableKeybind.TTS_NEXT:
+      ttsNext();
+      return true;
+    case BookReaderAvailableKeybind.TTS_PREV:
+      ttsPrev();
       return true;
     default:
       return false;

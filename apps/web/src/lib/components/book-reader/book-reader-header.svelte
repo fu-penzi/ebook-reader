@@ -8,6 +8,8 @@
     faFlag,
     faList,
     faRotateLeft,
+    faVolumeHigh,
+    faPause,
     type IconDefinition
   } from '@fortawesome/free-solid-svg-icons';
   import { readerImageGalleryPictures$ } from '$lib/components/book-reader/book-reader-image-gallery/book-reader-image-gallery';
@@ -25,6 +27,7 @@
   import { dummyFn, isMobile$, isOnOldUrl } from '$lib/functions/utils';
   import { createEventDispatcher } from 'svelte';
   import Fa from 'svelte-fa';
+  import TtsRateSelect from '$lib/components/book-reader/book-reader-tts/tts-rate-select.svelte';
 
   export let hasChapterData: boolean;
   export let hasText: boolean;
@@ -33,6 +36,10 @@
   export let showFullscreenButton: boolean;
   export let isBookmarkScreen: boolean;
   export let hasBookmarkData: boolean;
+  export let ttsSupported = false;
+  export let ttsSpeaking = false;
+  export let ttsPaused = false;
+  export let ttsRate = 1;
 
   const dispatch = createEventDispatcher<{
     tocClick: void;
@@ -49,6 +56,7 @@
     settingsClick: void;
     domainHintClick: void;
     bookManagerClick: void;
+    ttsClick: void;
   }>();
 
   const customReadingPointMenuItems: {
@@ -141,6 +149,23 @@
         title="Current Autoscroll Speed"
       >
         {autoScrollMultiplier}x
+      </div>
+    {/if}
+    {#if ttsSupported}
+      <div
+        tabindex="0"
+        role="button"
+        title={ttsSpeaking && !ttsPaused
+          ? 'Pause text to speech (s) · Space stops or restarts'
+          : 'Play text to speech (s) · Space stops or restarts'}
+        class={baseIconClasses}
+        on:click={() => dispatch('ttsClick')}
+        on:keyup={dummyFn}
+      >
+        <Fa icon={ttsSpeaking && !ttsPaused ? faPause : faVolumeHigh} />
+      </div>
+      <div class="flex items-center pr-2 xl:pr-1" title="Text to speech speed">
+        <TtsRateSelect compact bind:rate={ttsRate} />
       </div>
     {/if}
   </div>

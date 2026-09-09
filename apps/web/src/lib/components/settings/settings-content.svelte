@@ -15,6 +15,8 @@
   import SettingsCustomTheme from '$lib/components/settings/settings-custom-theme.svelte';
   import SettingsDimensionPopover from '$lib/components/settings/settings-dimension-popover.svelte';
   import SettingsFontSelector from '$lib/components/settings/settings-font-selector.svelte';
+  import SettingsTtsVoice from '$lib/components/settings/settings-tts-voice.svelte';
+  import SettingsTtsRate from '$lib/components/book-reader/book-reader-tts/tts-rate-select.svelte';
   import SettingsReadingGoals from '$lib/components/settings/settings-reading-goals.svelte';
   import SettingsItemGroup from '$lib/components/settings/settings-item-group.svelte';
   import SettingsStorageSourceList from '$lib/components/settings/settings-storage-source-list.svelte';
@@ -49,12 +51,16 @@
   import { secondsToMinutes } from '$lib/functions/statistic-util';
   import { dummyFn } from '$lib/functions/utils';
   import {
+    listSpeechVoices,
+    isSpeechSynthesisSupported
+  } from '$lib/components/book-reader/book-reader-tts/text-to-speech';
+  import {
     ReplicationSaveBehavior,
     AutoReplicationType
   } from '$lib/functions/replication/replication-options';
   import { map } from 'rxjs';
   import Fa from 'svelte-fa';
-  import { onDestroy } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
 
   export let selectedTheme: string;
 
@@ -99,6 +105,12 @@
   export let textMarginMode: TextMarginMode;
 
   export let enableReaderWakeLock: boolean;
+
+  export let ttsRate: number;
+
+  export let ttsVoiceURI: string;
+
+  export let ttsAutoScroll: boolean;
 
   export let showCharacterCounter: boolean;
 
@@ -211,6 +223,35 @@
   }));
 
   onDestroy(() => dialogManager.dialogs$.next([]));
+
+  let ttsVoices: SpeechSynthesisVoice[] = [];
+
+  const ttsSupported = browser && isSpeechSynthesisSupported();
+
+  onMount(() => {
+    if (!ttsSupported) {
+      return;
+    }
+
+    const loadVoices = () => {
+      ttsVoices = listSpeechVoices();
+    };
+
+    loadVoices();
+    window.speechSynthesis.addEventListener('voiceschanged', loadVoices);
+    const retry = window.setTimeout(loadVoices, 300);
+    const retryLate = window.setTimeout(loadVoices, 1000);
+
+    return () => {
+      window.speechSynthesis.removeEventListener('voiceschanged', loadVoices);
+      window.clearTimeout(retry);
+      window.clearTimeout(retryLate);
+    };
+  });
+
+  $: if (browser && ttsSupported && activeSettings === 'Reader') {
+    ttsVoices = listSpeechVoices();
+  }
 
   const optionsForFuriganaStyle: ToggleOption<FuriganaStyle>[] = [
     {
@@ -537,6 +578,25 @@
         <ButtonToggleGroup options={optionsForViewMode} bind:selectedOptionId={viewMode} />
       </SettingsItemGroup>
     </div>
+    {#if ttsSupported}
+      <div class="sm:col-span-2 lg:col-span-3">
+        <SettingsItemGroup
+          title="Text to Speech Voice"
+          tooltip="Voice used by reader Text to Speech. Auto prefers a Japanese voice when available"
+        >
+          <SettingsTtsVoice voices={ttsVoices} rate={ttsRate} bind:selectedVoiceURI={ttsVoiceURI} />
+        </SettingsItemGroup>
+      </div>
+      <SettingsItemGroup title="Text to Speech Speed" tooltip="Playback rate used by reader Text to Speech">
+        <SettingsTtsRate bind:rate={ttsRate} />
+      </SettingsItemGroup>
+      <SettingsItemGroup
+        title="Text to Speech Auto Scroll"
+        tooltip="When enabled the reader follows the currently spoken paragraph"
+      >
+        <ButtonToggleGroup options={optionsForToggle} bind:selectedOptionId={ttsAutoScroll} />
+      </SettingsItemGroup>
+    {/if}
     <SettingsItemGroup title="Font family (Group 1)">
       <div slot="header" class="flex items-center">
         <SettingsFontSelector

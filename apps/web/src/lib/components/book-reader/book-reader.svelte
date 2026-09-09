@@ -30,7 +30,7 @@
   import type { AutoScroller, BookmarkManager, PageManager } from './types';
   import BookReaderPaginated from './book-reader-paginated/book-reader-paginated.svelte';
   import { enableReaderWakeLock$, enableTapEdgeToFlip$ } from '$lib/data/store';
-  import { onDestroy } from 'svelte';
+  import { createEventDispatcher, onDestroy } from 'svelte';
 
   export let htmlContent: string;
 
@@ -123,6 +123,12 @@
   export let customReadingPointRange: Range | undefined;
 
   export let showCustomReadingPoint: boolean;
+
+  export let readerContentEl: HTMLElement | undefined = undefined;
+
+  const dispatch = createEventDispatcher<{
+    contentChange: HTMLElement;
+  }>();
 
   let showBlurMessage = false;
 
@@ -324,7 +330,11 @@
       bind:customReadingPointTop
       bind:customReadingPointLeft
       bind:customReadingPointScrollOffset
-      on:contentChange={(ev) => contentEl$.next(ev.detail)}
+      on:contentChange={(ev) => {
+        readerContentEl = ev.detail;
+        contentEl$.next(ev.detail);
+        dispatch('contentChange', ev.detail);
+      }}
       on:bookmark
       on:trackerPause
     />
@@ -368,7 +378,11 @@
       bind:pageManager
       bind:customReadingPointRange
       bind:showCustomReadingPoint
-      on:contentChange={(ev) => contentEl$.next(ev.detail)}
+      on:contentChange={(ev) => {
+        readerContentEl = ev.detail;
+        contentEl$.next(ev.detail);
+        dispatch('contentChange', ev.detail);
+      }}
       on:bookmark
       on:trackerPause
     />

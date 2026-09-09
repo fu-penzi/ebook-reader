@@ -27,7 +27,6 @@
     "eslint-plugin-rxjs": "5.0.3",
     "eslint-plugin-svelte": "3.23.0",
     "husky": "9.1.7",
-    "lint-staged": "17.5.0",
     "prettier": "3.6.2",
     "prettier-plugin-svelte": "4.1.1",
     "prettier-plugin-tailwindcss": "0.7.2",
@@ -35,13 +34,6 @@
     "svelte-eslint-parser": "1.8.1",
     "typescript": "6.0.3",
     "typescript-eslint": "8.25.0"
-  },
-  "lint-staged": {
-    "*.{js,cjs,mjs,ts,svelte}": [
-      "eslint --fix",
-      "prettier --write"
-    ],
-    "*.{json,md,html,scss,yml,yaml}": "prettier --write"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

@@ -16,7 +16,11 @@ export enum BookReaderAvailableKeybind {
   PREV_PAGE = 'prevPage',
   SET_READING_POINT = 'setCustomReadingPoint',
   TOGGLE_TRACKING = 'toggleTracking',
-  TOGGLE_TRACKING_FREEZE = 'toggleTrackingFreeze'
+  TOGGLE_TRACKING_FREEZE = 'toggleTrackingFreeze',
+  TTS_TOGGLE = 'ttsToggle',
+  TTS_RESTART = 'ttsRestart',
+  TTS_NEXT = 'ttsNext',
+  TTS_PREV = 'ttsPrev'
 }
 
 export type BookReaderKeybindMap = Record<string, BookReaderAvailableKeybind>;

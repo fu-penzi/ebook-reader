@@ -77,7 +77,10 @@
     showPercentage$,
     showFooterChapterCharacterCounter$,
     showFooterChapterPercentage$,
-    enableReaderWakeLock$
+    enableReaderWakeLock$,
+    ttsRate$,
+    ttsVoiceURI$,
+    ttsAutoScroll$
   } from '$lib/data/store';
 
   export let title = 'Error';
@@ -119,6 +122,9 @@
           enableTextJustification: enableTextJustification$.getValue(),
           enableTextWrapPretty: enableTextWrapPretty$.getValue(),
           enableReaderWakeLock: enableReaderWakeLock$.getValue(),
+          ttsRate: ttsRate$.getValue(),
+          ttsVoiceURI: ttsVoiceURI$.getValue(),
+          ttsAutoScroll: ttsAutoScroll$.getValue(),
           showCharacterCounter$: showCharacterCounter$.getValue(),
           showPercentage$: showPercentage$.getValue(),
           showFooterChapterCharacterCounter: showFooterChapterCharacterCounter$.getValue(),
