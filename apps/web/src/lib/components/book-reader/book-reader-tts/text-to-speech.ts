@@ -898,10 +898,9 @@ export class TextToSpeechController {
 
     this.advancing = true;
     const previousElement = this.blocks[this.blocks.length - 1];
-    const previousLastText = previousElement ? getSpeakableText(previousElement) : '';
 
+    this.pageManager.nextPage();
     for (let attempt = 0; attempt < 8; attempt += 1) {
-      this.pageManager.nextPage();
       await waitMs(120);
 
       if (generation !== this.generation) {
@@ -913,11 +912,7 @@ export class TextToSpeechController {
         this.blocks = getSpeakableElements(this.contentEl);
       }
 
-      const lastBlock = this.blocks[this.blocks.length - 1];
-      const lastText = lastBlock ? getSpeakableText(lastBlock) : '';
-      const previousIndex = this.blocks.findIndex(
-        (block) => getSpeakableText(block) === previousLastText
-      );
+      const previousIndex = previousElement ? this.blocks.indexOf(previousElement) : -1;
 
       if (previousIndex > -1 && previousIndex < this.blocks.length - 1) {
         this.advancing = false;
@@ -935,9 +930,7 @@ export class TextToSpeechController {
         return;
       }
 
-      if (!this.blocks.length || lastText === previousLastText) {
-        continue;
-      }
+      // The section render can lag behind nextPage(); keep waiting without flipping again.
     }
 
     this.advancing = false;
