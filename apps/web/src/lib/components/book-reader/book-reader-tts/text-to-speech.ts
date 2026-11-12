@@ -823,7 +823,7 @@ export class TextToSpeechController {
       text: chunk.text,
       offset: startOffset + chunk.offset
     }));
-    const speakNext = (chunkIndex: number) => {
+    const speakNext = (chunkIndex: number, retryCount = 0) => {
       if (generation !== this.generation || !this.speaking) {
         return;
       }
@@ -837,6 +837,7 @@ export class TextToSpeechController {
       const utterance = new SpeechSynthesisUtterance(chunk.text);
       utterance.rate = this.clampRate(this.options.rate);
       applySpeechVoice(utterance, this.options.voiceURI);
+      let completed = false;
 
       const highlightAt = (charIndex: number) => {
         if (generation !== this.generation || !this.speaking) {
@@ -860,23 +861,25 @@ export class TextToSpeechController {
       };
 
       utterance.onend = () => {
-        if (generation !== this.generation) {
+        if (generation !== this.generation || completed) {
           return;
         }
 
+        completed = true;
         speakNext(chunkIndex + 1);
       };
 
-      utterance.onerror = (event) => {
-        if (event.error === 'interrupted' || event.error === 'canceled') {
+      utterance.onerror = () => {
+        if (generation !== this.generation || completed) {
           return;
         }
 
-        if (generation !== this.generation) {
-          return;
+        completed = true;
+        if (retryCount === 0) {
+          speakNext(chunkIndex, 1);
+        } else {
+          speakNext(chunkIndex + 1);
         }
-
-        speakNext(chunkIndex + 1);
       };
 
       highlightAt(0);
